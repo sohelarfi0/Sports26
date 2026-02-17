@@ -1,5 +1,6 @@
 import { WebSocket, WebSocketServer } from "ws";
 import { parseAsync, trim } from "zod";
+import { wsArcjet } from "../arcjet";
 
 function sendJson(socket,payload){
     if(socket.readyState!==WebSocket.OPEN) return ;
@@ -16,28 +17,32 @@ function broadcast(wss,payload){
 
 }
 
-
-//  export function attachWebSocketServer(server){
-//     const wss= new WebSocketServer({server,path:'/ws', maxPayload:1024 * 1024});
-
-//     wss.on('connection',(socket)=>{
-//         sendJson(socket,{type:'welcome'});
-
-//         socket.on('error', console.error);
-//     });
-
-//     function broadcastMatchUpdated(match){
-//         broadcast(wss,{type:'match_created', data: match});
-//     }
-
-//     
-
-
-
 const attachWebSocketServer=(server)=>{
     const wss= new WebSocketServer({server,path:'/ws',maxPayload:1024 * 1024});
 
-    wss.on('connection',(socket)=>{
+    wss.on('connection',async(socket, req)=>{
+
+        if(wsArcjet){
+            try{
+                const decision= await wssArcjet.protect(req);
+
+                if(decision.isDenied()){
+                    const code = decision.reason.isRateLimit() ? 1013 : 1008;
+                    const reason = decision.reason.isRateLimit() ? 'Rate limit exceeded' : 'Access denied';
+
+                    socket.close(code, reason);
+                    return;
+                }
+
+            }
+            catch(e){
+                console.error('WS connection error', e);
+                socket.close(1011, 'Server security error');
+                return;
+
+            }
+        }
+
         socket.isAlive=true;
         socket.on('pong',()=>{socket.isAlive=true;});
 

@@ -1,6 +1,7 @@
 import express from 'express';
 import { matchRouter } from './routes/matches.js';
 import http from 'http';
+import { securityMiddleware } from './arcjet.js';
 
 
 const PORT=Number(process.env.PORT || 8000);
@@ -18,6 +19,7 @@ app.get('/',(req,res)=>{
 
 });
 
+app.use(securityMiddleware());
 
 app.use('/matches',matchRouter);
 
