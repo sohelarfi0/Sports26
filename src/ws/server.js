@@ -1,5 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws";
-import { parseAsync, trim } from "zod";
+import { date, parseAsync, trim } from "zod";
 import { wsArcjet } from "../arcjet";
 
 
@@ -44,7 +44,7 @@ function broadcastToAll(wss,payload){
 
 }
 
-function broadcatToMatch(matchId,payload){
+function broadcastToMatch(matchId,payload){
     const subscribers = matchSubscribers.get(matchId);
     if(!subscribers || subscribers.size === 0) return;
 
@@ -66,12 +66,21 @@ function handleMessage(socket, data){
         return;
     }
 
-    if(message ?. type === 'subscribe' && Number.isInteger(message.matchId)){
+    if(message ?. type === "subscribe" && Number.isInteger(message.matchId)){
     subscribe(message.matchId, socket)
         socket.subscriptions.add(message.matchId);
         sendJson(socket, { type:'subscribed',matchId:message.matchId});
         return;
+
+
     }
+
+    if(message?. type === "unsubscribe" && isInteger(message.matchId)){
+   unsubscribe(message.matchId,socket);
+   socket.subscriptions.delete(message);
+   sendJson(socket,{type:'unsubscribed', matchId:message.matchId});
+
+    }}
 
 
 
@@ -103,10 +112,26 @@ const attachWebSocketServer=(server)=>{
 
         socket.isAlive=true;
         socket.on('pong',()=>{socket.isAlive=true;});
+        
+        socket.subscriptions=new Set();
 
         sendJson(socket,{type:'welcome'});
 
-        socket.ping('error',console.error);
+        socket.on('message',(data)=>{
+            handleMessage(socket, data);
+        });
+
+        socket.on('error',()=>{
+            socket.terminate();
+        
+        });
+
+        socket.on('close',()=>{
+            cleanupSubscriptions(socket);
+        
+        });
+
+        socket.on('error',console.error);
 
     });
 
@@ -126,5 +151,9 @@ const attachWebSocketServer=(server)=>{
 
     }
 
-      return {broadcastMatchCreated}
-}}
+    function broadcastCommentary(matchId,comment){
+        broadcastToMatch(matchId,{type:'commentary',data:comment});
+    }
+
+      return {broadcastMatchCreated, broadcastCommentary};
+}
